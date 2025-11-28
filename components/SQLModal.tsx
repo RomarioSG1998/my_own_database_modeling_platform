@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Entity, Relationship, Attribute } from '../App';
 
@@ -8,15 +7,16 @@ interface SQLModalProps {
   entities: Entity[];
   relationships: Relationship[];
   onImport: (entities: Entity[], relationships: Relationship[]) => void;
+  isDarkMode: boolean;
 }
 
-const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relationships, onImport }) => {
+const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relationships, onImport, isDarkMode }) => {
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
   const [sqlContent, setSqlContent] = useState('');
 
   // --- EXPORT LOGIC ---
   const generateSQL = () => {
-    let sql = `-- Gerado pelo Cofry ER Diagram Viewer\n-- ${new Date().toLocaleString()}\n\n`;
+    let sql = `-- Gerado pelo My own model\n-- ${new Date().toLocaleString()}\n\n`;
 
     // 1. Create Tables
     entities.forEach(ent => {
@@ -197,30 +197,30 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh]">
-        <div className="flex border-b">
+      <div className={`rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+        <div className={`flex border-b ${isDarkMode ? 'border-slate-700' : 'border-gray-200'}`}>
             <button 
                 onClick={() => setActiveTab('export')}
-                className={`flex-1 p-4 font-bold text-center transition ${activeTab === 'export' ? 'bg-white border-b-2 border-blue-600 text-blue-600' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                className={`flex-1 p-4 font-bold text-center transition ${activeTab === 'export' ? 'border-b-2 border-blue-600 text-blue-600' : (isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-50 text-gray-500 hover:bg-gray-100')}`}
             >
                 Exportar SQL (Gerar)
             </button>
             <button 
                 onClick={() => setActiveTab('import')}
-                className={`flex-1 p-4 font-bold text-center transition ${activeTab === 'import' ? 'bg-white border-b-2 border-purple-600 text-purple-600' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                className={`flex-1 p-4 font-bold text-center transition ${activeTab === 'import' ? 'border-b-2 border-purple-600 text-purple-600' : (isDarkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-gray-50 text-gray-500 hover:bg-gray-100')}`}
             >
                 Importar SQL (Ler)
             </button>
         </div>
 
         <div className="p-4 flex-1 flex flex-col min-h-0">
-             <p className="text-sm text-gray-500 mb-2">
+             <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                  {activeTab === 'export' 
                     ? 'Copie este código para criar seu banco de dados.' 
                     : 'Cole comandos CREATE TABLE para gerar o diagrama.'}
              </p>
              <textarea 
-                className="w-full flex-1 p-3 font-mono text-sm bg-gray-50 border rounded resize-none focus:ring-2 focus:ring-blue-500 outline-none"
+                className={`w-full flex-1 p-3 font-mono text-sm border rounded resize-none focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-gray-50 border-gray-200 text-slate-800'}`}
                 value={sqlContent}
                 onChange={(e) => setSqlContent(e.target.value)}
                 readOnly={activeTab === 'export'}
@@ -228,8 +228,8 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
              />
         </div>
 
-        <div className="p-4 border-t flex justify-between items-center bg-gray-50 rounded-b-lg">
-             <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded">Cancelar</button>
+        <div className={`p-4 border-t flex justify-between items-center rounded-b-lg ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-gray-50 border-gray-200'}`}>
+             <button onClick={onClose} className={`px-4 py-2 rounded ${isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-gray-600 hover:bg-gray-200'}`}>Cancelar</button>
              
              <div className="flex gap-2">
                 {activeTab === 'export' ? (
@@ -246,7 +246,7 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement('a');
                                 a.href = url;
-                                a.download = 'database_cofry.sql';
+                                a.download = 'database_my_own_model.sql';
                                 a.click();
                             }}
                             className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded font-medium shadow"

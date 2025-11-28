@@ -1,5 +1,5 @@
 {
-  "name": "ER Diagram Viewer",
+  "name": "My own model",
   "description": "A clean and responsive viewer for a database ER diagram, specifically designed to handle large diagrams on smaller screens with horizontal scrolling.",
   "requestFramePermissions": []
 }

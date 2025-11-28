@@ -1,4 +1,3 @@
-
 import React, { useState, MouseEvent, useRef } from 'react';
 import { Entity, Relationship } from '../App';
 
@@ -12,6 +11,9 @@ interface ERDiagramChenProps {
     setPan: (pan: { x: number; y: number }) => void;
     isPanMode: boolean;
     showExplanations: boolean;
+    isEditMode: boolean;
+    connectingSourceId: string | null;
+    isDarkMode: boolean;
 }
 
 interface Point { x: number; y: number; }
@@ -36,7 +38,6 @@ const findClosestAnchors = (anchors1: Point[], anchors2: Point[]): [Point, Point
 
 // --- COMPONENTS ---
 const Tooltip: React.FC<{ x: number; y: number; title: string; text: string }> = ({ x, y, title, text }) => {
-    // We use foreignObject to allow HTML text wrapping inside SVG
     const width = 280;
     
     return (
@@ -58,7 +59,8 @@ const EntityNode: React.FC<{
     onMouseEnter: (e: MouseEvent) => void;
     onMouseLeave: () => void;
     isPanMode: boolean;
-}> = ({ x, y, title, onClick, onMouseDown, onMouseEnter, onMouseLeave, isPanMode }) => (
+    isDarkMode: boolean;
+}> = ({ x, y, title, onClick, onMouseDown, onMouseEnter, onMouseLeave, isPanMode, isDarkMode }) => (
   <g 
     transform={`translate(${x}, ${y})`} 
     onClick={(e) => { e.stopPropagation(); onClick(); }} 
@@ -67,15 +69,15 @@ const EntityNode: React.FC<{
     onMouseLeave={onMouseLeave}
     className={`${isPanMode ? 'cursor-grab' : 'cursor-grab active:cursor-grabbing'} hover:opacity-80`}
   >
-    <rect x="-70" y="-25" width="140" height="50" fill="#e0e7ff" stroke="#a5b4fc" strokeWidth="2" rx="4" />
-    <text y="5" textAnchor="middle" fontWeight="bold" fill="#312e81" fontSize="14" className="select-none">{title}</text>
+    <rect x="-70" y="-25" width="140" height="50" fill={isDarkMode ? '#1e293b' : '#e0e7ff'} stroke={isDarkMode ? '#3b82f6' : '#a5b4fc'} strokeWidth="2" rx="4" />
+    <text y="5" textAnchor="middle" fontWeight="bold" fill={isDarkMode ? '#e0e7ff' : '#312e81'} fontSize="14" className="select-none">{title}</text>
   </g>
 );
 
-const AttributeNode: React.FC<{ x: number; y: number; name: string; isKey: boolean }> = ({ x, y, name, isKey }) => (
+const AttributeNode: React.FC<{ x: number; y: number; name: string; isKey: boolean; isDarkMode: boolean }> = ({ x, y, name, isKey, isDarkMode }) => (
   <g transform={`translate(${x}, ${y})`}>
-    <ellipse cx="0" cy="0" rx="60" ry="20" fill="#f3f4f6" stroke="#9ca3af" strokeWidth="1.5" />
-    <text y="4" textAnchor="middle" fontSize="11" fill="#1f2937" style={{ textDecoration: isKey ? 'underline' : 'none' }} className="select-none">{name}</text>
+    <ellipse cx="0" cy="0" rx="60" ry="20" fill={isDarkMode ? '#334155' : '#f3f4f6'} stroke={isDarkMode ? '#94a3b8' : '#9ca3af'} strokeWidth="1.5" />
+    <text y="4" textAnchor="middle" fontSize="11" fill={isDarkMode ? '#f8fafc' : '#1f2937'} style={{ textDecoration: isKey ? 'underline' : 'none' }} className="select-none">{name}</text>
   </g>
 );
 
@@ -86,7 +88,8 @@ const RelationshipNode: React.FC<{
     onClick: () => void;
     onMouseEnter: (e: MouseEvent) => void;
     onMouseLeave: () => void;
-}> = ({ x, y, label, onClick, onMouseEnter, onMouseLeave }) => (
+    isDarkMode: boolean;
+}> = ({ x, y, label, onClick, onMouseEnter, onMouseLeave, isDarkMode }) => (
   <g 
     transform={`translate(${x}, ${y})`} 
     onClick={(e) => { e.stopPropagation(); onClick(); }} 
@@ -94,17 +97,17 @@ const RelationshipNode: React.FC<{
     onMouseLeave={onMouseLeave}
     className="cursor-pointer hover:opacity-80"
   >
-    <path d="M 0 -35 L 60 0 L 0 35 L -60 0 Z" fill="#fecaca" stroke="#f87171" strokeWidth="2" />
-    <text y="4" textAnchor="middle" fontWeight="bold" fill="#7f1d1d" fontSize="11" className="select-none">{label}</text>
+    <path d="M 0 -35 L 60 0 L 0 35 L -60 0 Z" fill={isDarkMode ? '#450a0a' : '#fecaca'} stroke={isDarkMode ? '#ef4444' : '#f87171'} strokeWidth="2" />
+    <text y="4" textAnchor="middle" fontWeight="bold" fill={isDarkMode ? '#fca5a5' : '#7f1d1d'} fontSize="11" className="select-none">{label}</text>
   </g>
 );
 
-const ConnectingLine: React.FC<{ x1: number; y1: number; x2: number; y2: number }> = ({ x1, y1, x2, y2 }) => (
-  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#6b7280" strokeWidth="1.5" />
+const ConnectingLine: React.FC<{ x1: number; y1: number; x2: number; y2: number; isDarkMode: boolean }> = ({ x1, y1, x2, y2, isDarkMode }) => (
+  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={isDarkMode ? '#64748b' : '#6b7280'} strokeWidth="1.5" />
 );
 
 // --- MAIN COMPONENT ---
-const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, onSelect, onEntityUpdate, zoomScale, pan, setPan, isPanMode, showExplanations }) => {
+const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, onSelect, onEntityUpdate, zoomScale, pan, setPan, isPanMode, showExplanations, isDarkMode }) => {
     const [draggedItem, setDraggedItem] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState<{ x: number, y: number } | null>(null);
@@ -201,7 +204,6 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
             const isManyTo = rel.cardTo.includes('many');
             
             if (!isManyFrom && isManyTo) {
-                 // 1:N
                  text = `Um(a) ${rel.fromE.title} pode ter múltiplos(as) ${rel.toE.title} associados(as).`;
             } else if (isManyFrom && !isManyTo) {
                 // N:1
@@ -219,7 +221,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         id="er-diagram-svg" 
         width="2000" 
         height="1500" 
-        className={`min-w-[2000px] p-4 font-sans bg-slate-50 border border-slate-200 shadow-sm ${isPanMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+        className={`min-w-[2000px] p-4 font-sans shadow-sm ${isDarkMode ? 'bg-transparent' : 'bg-slate-50 border border-slate-200'} ${isPanMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
         onMouseDown={handleMouseDownBg}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -243,8 +245,8 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
 
             return (
                 <React.Fragment key={rel.id}>
-                    <ConnectingLine x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} />
-                    <ConnectingLine x1={p3.x} y1={p3.y} x2={p4.x} y2={p4.y} />
+                    <ConnectingLine x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} isDarkMode={isDarkMode} />
+                    <ConnectingLine x1={p3.x} y1={p3.y} x2={p4.x} y2={p4.y} isDarkMode={isDarkMode} />
                 </React.Fragment>
             )
         })}
@@ -260,7 +262,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
                     {x: ent.x - 70, y: ent.y}, {x: ent.x + 70, y: ent.y}
                 ];
                 const [p1, p2] = findClosestAnchors(entAnchors, [{x: attrX, y: attrY}]);
-                return <ConnectingLine key={`line-${ent.id}-${attr.id}`} x1={p1.x} y1={p1.y} x2={attrX} y2={attrY} />;
+                return <ConnectingLine key={`line-${ent.id}-${attr.id}`} x1={p1.x} y1={p1.y} x2={attrX} y2={attrY} isDarkMode={isDarkMode} />;
             });
         })}
 
@@ -274,6 +276,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
                 onClick={() => onSelect(rel.id, 'relationship')} 
                 onMouseEnter={(e) => handleRelHover(e, rel)}
                 onMouseLeave={() => setHoveredTip(null)}
+                isDarkMode={isDarkMode}
             />
         ))}
 
@@ -288,6 +291,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
                 onMouseEnter={(e) => handleEntityHover(e, ent)}
                 onMouseLeave={() => setHoveredTip(null)}
                 isPanMode={isPanMode}
+                isDarkMode={isDarkMode}
             />
         ))}
 
@@ -296,7 +300,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
                 const angle = (i / ent.attributes.length) * 2 * Math.PI - Math.PI / 2;
                 const attrX = ent.x + Math.cos(angle) * RADIUS_X;
                 const attrY = ent.y + Math.sin(angle) * RADIUS_Y;
-                return <AttributeNode key={attr.id} x={attrX} y={attrY} name={attr.name} isKey={attr.isKey} />
+                return <AttributeNode key={attr.id} x={attrX} y={attrY} name={attr.name} isKey={attr.isKey} isDarkMode={isDarkMode} />
              });
         })}
 
