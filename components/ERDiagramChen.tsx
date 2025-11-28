@@ -1,5 +1,5 @@
 import React, { useState, MouseEvent, useRef } from 'react';
-import { Entity, Relationship } from '../App';
+import { Entity, Relationship, RemoteUser } from '../App';
 
 interface ERDiagramChenProps {
     entities: Entity[];
@@ -14,6 +14,8 @@ interface ERDiagramChenProps {
     isEditMode: boolean;
     connectingSourceId: string | null;
     isDarkMode: boolean;
+    remoteUsers: Record<string, RemoteUser>;
+    onMouseMoveBroadcast: (x: number, y: number) => void;
 }
 
 interface Point { x: number; y: number; }
@@ -49,6 +51,16 @@ const Tooltip: React.FC<{ x: number; y: number; title: string; text: string }> =
         </foreignObject>
     )
 }
+
+const RemoteCursor: React.FC<{ user: RemoteUser }> = ({ user }) => (
+    <g transform={`translate(${user.x}, ${user.y})`} style={{ transition: 'transform 0.1s linear' }}>
+        <path d="M0 0 L10 10 L6 11 L9 16 L7 17 L4 12 L0 16 Z" fill={user.color} stroke="white" strokeWidth="1"/>
+        <text x="12" y="15" fontSize="10" fill="white" fontWeight="bold" className="select-none" style={{textShadow: '0px 1px 2px rgba(0,0,0,0.5)'}}>
+            <tspan fill={user.color} opacity="0.8">■ </tspan>
+            {user.name}
+        </text>
+    </g>
+);
 
 const EntityNode: React.FC<{ 
     x: number; 
@@ -107,7 +119,7 @@ const ConnectingLine: React.FC<{ x1: number; y1: number; x2: number; y2: number;
 );
 
 // --- MAIN COMPONENT ---
-const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, onSelect, onEntityUpdate, zoomScale, pan, setPan, isPanMode, showExplanations, isDarkMode }) => {
+const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, onSelect, onEntityUpdate, zoomScale, pan, setPan, isPanMode, showExplanations, isDarkMode, remoteUsers, onMouseMoveBroadcast }) => {
     const [draggedItem, setDraggedItem] = useState<{ id: string; offsetX: number; offsetY: number } | null>(null);
     const [isPanning, setIsPanning] = useState(false);
     const [panStart, setPanStart] = useState<{ x: number, y: number } | null>(null);
@@ -135,7 +147,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         const x = (fromE.x + toE.x) / 2;
         const y = (fromE.y + toE.y) / 2;
         return { ...rel, x, y, fromE, toE };
-    }).filter(r => r !== null) as (Relationship & { x: number, y: number, fromE: Entity, toE: Entity })[];
+    }).filter((r) => r !== null) as (Relationship & { x: number, y: number, fromE: Entity, toE: Entity })[];
 
     const RADIUS_X = 130;
     const RADIUS_Y = 100;
@@ -163,9 +175,12 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
 
     const handleMouseMove = (e: MouseEvent) => {
         e.preventDefault();
+        
+        const pt = getSVGPoint(e);
+        onMouseMoveBroadcast(pt.x, pt.y);
+
         if (draggedItem && !isPanMode) {
-            const point = getSVGPoint(e);
-            onEntityUpdate(draggedItem.id, point.x - draggedItem.offsetX, point.y - draggedItem.offsetY);
+            onEntityUpdate(draggedItem.id, pt.x - draggedItem.offsetX, pt.y - draggedItem.offsetY);
             return;
         }
         if (isPanning && panStart) {
@@ -303,6 +318,11 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
                 return <AttributeNode key={attr.id} x={attrX} y={attrY} name={attr.name} isKey={attr.isKey} isDarkMode={isDarkMode} />
              });
         })}
+
+        {/* REMOTE CURSORS */}
+        {Object.values(remoteUsers).map(user => (
+            <RemoteCursor key={user.id} user={user} />
+        ))}
 
         {/* TOOLTIP */}
         {showExplanations && hoveredTip && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ERDiagram from './components/ERDiagram';
 import ERDiagramChen from './components/ERDiagramChen';
 import SQLModal from './components/SQLModal';
@@ -38,6 +38,14 @@ interface Toast {
   id: number;
   message: string;
   type: 'success' | 'info' | 'error';
+}
+
+export interface RemoteUser {
+    id: string;
+    name: string;
+    color: string;
+    x: number;
+    y: number;
 }
 
 // --- INITIAL DATA ---
@@ -234,6 +242,7 @@ const commonDataTypes = [
 ];
 
 const STORAGE_KEY = 'my_own_model_v1';
+const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
 
 const App: React.FC = () => {
   // --- PERSISTENCE HELPER ---
@@ -248,6 +257,17 @@ const App: React.FC = () => {
         return fallback;
     }
   };
+
+  // --- IDENTITY & ROOM ---
+  const [currentUser] = useState(() => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name: `User ${Math.floor(Math.random() * 1000)}`,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+  }));
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<Record<string, RemoteUser>>({});
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const ignoreNextBroadcast = useRef(false);
 
   // --- AUTH STATE ---
   const [isAuthenticated, setIsAuthenticated] = useState(() => loadFromStorage<boolean>('isAuthenticated', false));
@@ -272,6 +292,98 @@ const App: React.FC = () => {
 
   // --- CONNECTION STATE ---
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
+
+  // --- INITIALIZATION & BROADCAST SETUP ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('room');
+    if (room) {
+        setRoomId(room);
+    }
+  }, []);
+
+  useEffect(() => {
+      if (!roomId) return;
+
+      const channelName = `er-diagram-room-${roomId}`;
+      const channel = new BroadcastChannel(channelName);
+      broadcastChannelRef.current = channel;
+
+      channel.onmessage = (event) => {
+          const { type, payload, user } = event.data;
+
+          if (user.id === currentUser.id) return; // Ignore own messages
+
+          if (type === 'DATA_UPDATE') {
+              ignoreNextBroadcast.current = true;
+              setEntities(payload.entities);
+              setRelationships(payload.relationships);
+              // Small timeout to allow state settle before enabling broadcast again
+              setTimeout(() => { ignoreNextBroadcast.current = false; }, 100);
+          } else if (type === 'CURSOR_MOVE') {
+              setRemoteUsers(prev => ({
+                  ...prev,
+                  [user.id]: { ...user, x: payload.x, y: payload.y, lastActive: Date.now() }
+              }));
+          } else if (type === 'SYNC_REQUEST') {
+              // New user wants data, send current state
+              channel.postMessage({
+                  type: 'DATA_UPDATE',
+                  payload: { entities, relationships },
+                  user: currentUser
+              });
+          }
+      };
+
+      // Request initial data sync when joining
+      channel.postMessage({ type: 'SYNC_REQUEST', user: currentUser });
+
+      return () => {
+          channel.close();
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]); // Re-run only if room ID changes
+
+  // Cleanup inactive users every 5s
+  useEffect(() => {
+      if (!roomId) return;
+      const interval = setInterval(() => {
+          const now = Date.now();
+          setRemoteUsers(prev => {
+              const next = { ...prev };
+              let changed = false;
+              Object.keys(next).forEach(key => {
+                  if (now - (next[key] as any).lastActive > 10000) { // 10s timeout
+                      delete next[key];
+                      changed = true;
+                  }
+              });
+              return changed ? next : prev;
+          });
+      }, 5000);
+      return () => clearInterval(interval);
+  }, [roomId]);
+
+
+  // --- BROADCAST HELPERS ---
+  const broadcastData = useCallback((newEntities: Entity[], newRelationships: Relationship[]) => {
+      if (!broadcastChannelRef.current || ignoreNextBroadcast.current) return;
+      broadcastChannelRef.current.postMessage({
+          type: 'DATA_UPDATE',
+          payload: { entities: newEntities, relationships: newRelationships },
+          user: currentUser
+      });
+  }, [currentUser]);
+
+  const broadcastCursor = useCallback((x: number, y: number) => {
+      if (!broadcastChannelRef.current) return;
+      broadcastChannelRef.current.postMessage({
+          type: 'CURSOR_MOVE',
+          payload: { x, y },
+          user: currentUser
+      });
+  }, [currentUser]);
+
 
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
@@ -315,7 +427,7 @@ const App: React.FC = () => {
       }, 3000);
   };
 
-  // --- HANDLERS ---
+  // --- HANDLERS (With Broadcast) ---
   const handleSelect = (id: string, type: 'entity' | 'relationship') => {
     if (isEditMode) {
         // If we are connecting, handle that instead of selecting
@@ -334,7 +446,10 @@ const App: React.FC = () => {
                 cardTo: ['many'],
                 label: 'NOVA_REL'
             };
-            setRelationships([...relationships, newRel]);
+            const nextRels = [...relationships, newRel];
+            setRelationships(nextRels);
+            broadcastData(entities, nextRels); // Broadcast
+
             setConnectingSourceId(null);
             setSelectedId(newId);
             setSelectedType('relationship');
@@ -356,7 +471,9 @@ const App: React.FC = () => {
   };
 
   const handleUpdateEntityPos = (id: string, x: number, y: number) => {
-    setEntities(prev => prev.map(e => e.id === id ? { ...e, x, y } : e));
+    const nextEntities = entities.map(e => e.id === id ? { ...e, x, y } : e);
+    setEntities(nextEntities);
+    broadcastData(nextEntities, relationships); // Broadcast
   };
 
   const handleAddEntity = () => {
@@ -371,37 +488,36 @@ const App: React.FC = () => {
       attributes: [{ id: generateId(), name: 'ID', type: 'INT', isKey: true }],
       description: 'Nova entidade criada. Edite para descrever sua função.'
     };
-    setEntities([...entities, newEntity]);
+    const nextEntities = [...entities, newEntity];
+    setEntities(nextEntities);
+    broadcastData(nextEntities, relationships); // Broadcast
+
     showToast('Entidade criada!', 'success');
     if (isEditMode) handleSelect(newId, 'entity');
   };
 
   const handleDeleteEntity = () => {
     if (!selectedId || selectedType !== 'entity') return;
-    setRelationships(prev => prev.filter(r => r.from !== selectedId && r.to !== selectedId));
-    setEntities(prev => prev.filter(e => e.id !== selectedId));
+    const nextRels = relationships.filter(r => r.from !== selectedId && r.to !== selectedId);
+    const nextEntities = entities.filter(e => e.id !== selectedId);
+    setRelationships(nextRels);
+    setEntities(nextEntities);
+    broadcastData(nextEntities, nextRels); // Broadcast
+
     setSelectedId(null);
     showToast('Entidade removida.', 'info');
   };
 
   const handleAddRelationship = () => {
+    // Deprecated via UI but kept for safety
     if (entities.length < 2) return alert("Precisa de pelo menos 2 entidades.");
-    const newId = `REL_${generateId()}`;
-    const newRel: Relationship = {
-      id: newId,
-      from: entities[0].id,
-      to: entities[1].id,
-      cardFrom: ['one'],
-      cardTo: ['many'],
-      label: 'RELACAO'
-    };
-    setRelationships([...relationships, newRel]);
-    if (isEditMode) handleSelect(newId, 'relationship');
   };
 
   const handleDeleteRelationship = () => {
     if (!selectedId || selectedType !== 'relationship') return;
-    setRelationships(prev => prev.filter(r => r.id !== selectedId));
+    const nextRels = relationships.filter(r => r.id !== selectedId);
+    setRelationships(nextRels);
+    broadcastData(entities, nextRels); // Broadcast
     setSelectedId(null);
     showToast('Relação removida.', 'info');
   };
@@ -409,6 +525,7 @@ const App: React.FC = () => {
   const handleImportData = (newEntities: Entity[], newRelationships: Relationship[]) => {
       setEntities(newEntities);
       setRelationships(newRelationships);
+      broadcastData(newEntities, newRelationships); // Broadcast
       setIsSQLModalOpen(false);
       setScale(0.8);
       setPan({x: 0, y: 0});
@@ -419,6 +536,7 @@ const App: React.FC = () => {
     if (window.confirm("Tem certeza que deseja limpar todo o diagrama? Essa ação removerá todas as entidades e relações e não pode ser desfeita.")) {
       setEntities([]);
       setRelationships([]);
+      broadcastData([], []); // Broadcast
       setSelectedId(null);
       setSelectedType(null);
       setScale(1);
@@ -426,6 +544,22 @@ const App: React.FC = () => {
       setIsEditMode(true);
       showToast('Diagrama limpo.', 'info');
     }
+  };
+
+  // --- LIVE MODE ACTIONS ---
+  const handleLiveMode = () => {
+      if (roomId) {
+          navigator.clipboard.writeText(window.location.href);
+          showToast('Você já está ao vivo! Link copiado.', 'success');
+      } else {
+          const newRoomId = Math.random().toString(36).substr(2, 6);
+          const url = new URL(window.location.href);
+          url.searchParams.set('room', newRoomId);
+          window.history.pushState({}, '', url.toString());
+          setRoomId(newRoomId);
+          navigator.clipboard.writeText(url.toString());
+          showToast('Modo Live Ativado! Link copiado para a área de transferência.', 'success');
+      }
   };
 
   // --- ZOOM ---
@@ -443,27 +577,19 @@ const App: React.FC = () => {
       showToast("Erro ao encontrar diagrama.", 'error');
       return;
     }
-    
     showToast("Gerando imagem...", 'info');
-    
-    // Create a canvas with the dot grid background color
     const canvas = document.createElement('canvas');
     canvas.width = 1600; 
     canvas.height = 1200;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    // Fill background based on theme
     ctx.fillStyle = isDarkMode ? '#0f172a' : '#f8fafc';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Serialize SVG
     const svgClone = svgElement.cloneNode(true) as SVGElement;
     const svgData = new XMLSerializer().serializeToString(svgClone);
     const img = new Image();
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
-
     img.onload = () => {
       ctx.drawImage(img, 0, 0, 1600, 1200); 
       URL.revokeObjectURL(url);
@@ -479,9 +605,9 @@ const App: React.FC = () => {
     img.src = url;
   };
 
-  // --- HELPER FOR REORDERING ---
+  // --- HELPER FOR REORDERING (With Broadcast) ---
   const moveAttribute = (entityId: string, attrIndex: number, direction: 'up' | 'down') => {
-      setEntities(prev => prev.map(ent => {
+      const nextEntities = entities.map(ent => {
           if (ent.id !== entityId) return ent;
           const newAttrs = [...ent.attributes];
           if (direction === 'up') {
@@ -492,13 +618,14 @@ const App: React.FC = () => {
               [newAttrs[attrIndex], newAttrs[attrIndex + 1]] = [newAttrs[attrIndex + 1], newAttrs[attrIndex]];
           }
           return { ...ent, attributes: newAttrs };
-      }));
+      });
+      setEntities(nextEntities);
+      broadcastData(nextEntities, relationships);
   };
 
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        // Prevent deleting if user is typing in an input
         const activeTag = document.activeElement?.tagName;
         if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
@@ -517,10 +644,40 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, selectedType]);
+  }, [selectedId, selectedType, entities, relationships]); // deps updated for handlers
 
 
-  // --- EDITOR RENDER ---
+  // --- EDITOR RENDER (Update to use broadcast wrappers) ---
+  const handleEntityTitleChange = (id: string, val: string) => {
+      const next = entities.map(ent => ent.id === id ? {...ent, title: val.toUpperCase()} : ent);
+      setEntities(next);
+      broadcastData(next, relationships);
+  }
+
+  const handleEntityDescChange = (id: string, val: string) => {
+      const next = entities.map(ent => ent.id === id ? {...ent, description: val} : ent);
+      setEntities(next);
+      broadcastData(next, relationships);
+  }
+
+  const handleEntityColorChange = (id: string, val: ColorScheme) => {
+      const next = entities.map(ent => ent.id === id ? {...ent, colorScheme: val} : ent);
+      setEntities(next);
+      broadcastData(next, relationships);
+  }
+  
+  const handleAttributeUpdate = (entId: string, newAttrs: Attribute[]) => {
+      const next = entities.map(ent => ent.id === entId ? {...ent, attributes: newAttrs} : ent);
+      setEntities(next);
+      broadcastData(next, relationships);
+  }
+
+  const handleRelUpdate = (relId: string, updates: Partial<Relationship>) => {
+      const next = relationships.map(r => r.id === relId ? {...r, ...updates} : r);
+      setRelationships(next);
+      broadcastData(entities, next);
+  }
+
   const renderEditor = () => {
     if (!isEditMode) return null;
 
@@ -566,7 +723,7 @@ const App: React.FC = () => {
             <input 
               type="text" 
               value={entity.title} 
-              onChange={(e) => setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, title: e.target.value.toUpperCase()} : ent))}
+              onChange={(e) => handleEntityTitleChange(entity.id, e.target.value)}
               className={`${inputClass} font-mono uppercase`}
             />
           </div>
@@ -576,7 +733,7 @@ const App: React.FC = () => {
               value={entity.description || ''} 
               rows={3}
               placeholder="Descreva a função desta tabela..."
-              onChange={(e) => setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, description: e.target.value} : ent))}
+              onChange={(e) => handleEntityDescChange(entity.id, e.target.value)}
               className={`${inputClass} text-sm`}
             />
           </div>
@@ -586,7 +743,7 @@ const App: React.FC = () => {
                 {['blue', 'orange', 'green', 'pink'].map((c) => (
                     <button 
                         key={c}
-                        onClick={() => setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, colorScheme: c as ColorScheme} : ent))}
+                        onClick={() => handleEntityColorChange(entity.id, c as ColorScheme)}
                         className={`w-8 h-8 rounded-full border-2 ${entity.colorScheme === c ? 'border-gray-600 scale-110' : 'border-transparent'}`}
                         style={{ backgroundColor: c === 'blue' ? '#c7d2fe' : c === 'orange' ? '#fed7aa' : c === 'green' ? '#bbf7d0' : '#fbcfe8'}}
                     />
@@ -613,7 +770,7 @@ const App: React.FC = () => {
                     onChange={(e) => {
                        const newAttrs = [...entity.attributes];
                        newAttrs[idx].name = e.target.value;
-                       setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, attributes: newAttrs} : ent));
+                       handleAttributeUpdate(entity.id, newAttrs);
                     }}
                   />
                   <input 
@@ -624,7 +781,7 @@ const App: React.FC = () => {
                     onChange={(e) => {
                        const newAttrs = [...entity.attributes];
                        newAttrs[idx].type = e.target.value;
-                       setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, attributes: newAttrs} : ent));
+                       handleAttributeUpdate(entity.id, newAttrs);
                     }}
                   />
                   <datalist id={`types-${entity.id}`}>
@@ -637,9 +794,9 @@ const App: React.FC = () => {
                         className="accent-blue-600 h-4 w-4"
                         checked={attr.isKey} 
                         onChange={(e) => {
-                        const newAttrs = [...entity.attributes];
-                        newAttrs[idx].isKey = e.target.checked;
-                        setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, attributes: newAttrs} : ent));
+                            const newAttrs = [...entity.attributes];
+                            newAttrs[idx].isKey = e.target.checked;
+                            handleAttributeUpdate(entity.id, newAttrs);
                         }}
                     />
                     <span className="text-[8px] font-bold text-gray-500 mt-0.5">PK</span>
@@ -648,7 +805,7 @@ const App: React.FC = () => {
                   <button 
                     onClick={() => {
                        const newAttrs = entity.attributes.filter(a => a.id !== attr.id);
-                       setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, attributes: newAttrs} : ent));
+                       handleAttributeUpdate(entity.id, newAttrs);
                     }}
                     className="text-gray-300 hover:text-red-500 p-1"
                   >✕</button>
@@ -658,7 +815,7 @@ const App: React.FC = () => {
             <button 
               onClick={() => {
                 const newAttr: Attribute = { id: generateId(), name: 'novo_campo', type: 'VARCHAR(100)', isKey: false };
-                setEntities(prev => prev.map(ent => ent.id === entity.id ? {...ent, attributes: [...ent.attributes, newAttr]} : ent));
+                handleAttributeUpdate(entity.id, [...entity.attributes, newAttr]);
               }}
               className={`mt-3 w-full py-2 border-2 border-dashed rounded-lg font-medium transition-colors text-sm ${isDarkMode ? 'border-slate-600 text-slate-400 hover:bg-slate-800 hover:border-slate-500' : 'border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-400'}`}
             >
@@ -703,7 +860,7 @@ const App: React.FC = () => {
             <input 
               type="text" 
               value={rel.label} 
-              onChange={(e) => setRelationships(prev => prev.map(r => r.id === rel.id ? {...r, label: e.target.value.toUpperCase()} : r))}
+              onChange={(e) => handleRelUpdate(rel.id, { label: e.target.value.toUpperCase() })}
               className={inputClass}
             />
           </div>
@@ -713,7 +870,7 @@ const App: React.FC = () => {
               value={rel.description || ''} 
               rows={4}
               placeholder="Explique a conexão..."
-              onChange={(e) => setRelationships(prev => prev.map(r => r.id === rel.id ? {...r, description: e.target.value} : r))}
+              onChange={(e) => handleRelUpdate(rel.id, { description: e.target.value })}
               className={`${inputClass} text-sm`}
             />
           </div>
@@ -723,7 +880,7 @@ const App: React.FC = () => {
                 <label className={labelClass}>Origem</label>
                 <select 
                     value={rel.cardFrom[0] || 'one'}
-                    onChange={(e) => setRelationships(prev => prev.map(r => r.id === rel.id ? {...r, cardFrom: [e.target.value as CardinalityType]} : r))}
+                    onChange={(e) => handleRelUpdate(rel.id, { cardFrom: [e.target.value as CardinalityType] })}
                     className={`${inputClass} bg-white`}
                 >
                     <option value="zero">Zero (0)</option>
@@ -735,7 +892,7 @@ const App: React.FC = () => {
                 <label className={labelClass}>Destino</label>
                 <select 
                     value={rel.cardTo[0] || 'many'}
-                    onChange={(e) => setRelationships(prev => prev.map(r => r.id === rel.id ? {...r, cardTo: [e.target.value as CardinalityType]} : r))}
+                    onChange={(e) => handleRelUpdate(rel.id, { cardTo: [e.target.value as CardinalityType] })}
                     className={`${inputClass} bg-white`}
                 >
                     <option value="zero">Zero (0)</option>
@@ -813,6 +970,11 @@ const App: React.FC = () => {
              <div className="flex items-center gap-2">
                  <span className={`text-xl font-extrabold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>My own model</span>
                  <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Beta</span>
+                 {roomId && (
+                     <span className="bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse flex items-center gap-1">
+                         <span className="w-2 h-2 rounded-full bg-red-500 block"></span> Live
+                     </span>
+                 )}
              </div>
              <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`}>Modelagem de Dados</p>
           </div>
@@ -866,6 +1028,8 @@ const App: React.FC = () => {
                         isEditMode={isEditMode}
                         connectingSourceId={connectingSourceId}
                         isDarkMode={isDarkMode}
+                        remoteUsers={remoteUsers}
+                        onMouseMoveBroadcast={broadcastCursor}
                     /> 
                 ) : (
                     <ERDiagram 
@@ -882,6 +1046,8 @@ const App: React.FC = () => {
                         connectingSourceId={connectingSourceId}
                         onConnectStart={handleConnectStart}
                         isDarkMode={isDarkMode}
+                        remoteUsers={remoteUsers}
+                        onMouseMoveBroadcast={broadcastCursor}
                     />
                 )}
             </div>
@@ -941,9 +1107,20 @@ const App: React.FC = () => {
                   )}
               </div>
 
+              <div className={`w-px h-8 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
+
+              {/* GROUP 4: LIVE */}
+              <button 
+                 onClick={handleLiveMode}
+                 className={`p-2 rounded-xl transition flex items-center gap-1 ${roomId ? 'bg-red-100 text-red-600' : (isDarkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-100 text-slate-400')}`}
+                 title={roomId ? "Link Copiado" : "Iniciar Live Collaboration"}
+               >
+                   📡 {roomId && <span className="text-[10px] font-bold">ON</span>}
+               </button>
+
                <div className={`w-px h-8 ${isDarkMode ? 'bg-slate-600' : 'bg-slate-200'}`}></div>
               
-              {/* GROUP 4: THEME & HELP */}
+              {/* GROUP 5: THEME & HELP */}
                <button 
                  onClick={() => setIsDarkMode(!isDarkMode)}
                  className={`p-2 rounded-xl transition ${isDarkMode ? 'bg-slate-700 text-yellow-300' : 'hover:bg-slate-100 text-slate-400'}`}
