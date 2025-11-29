@@ -21,7 +21,6 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
     // 1. Create Tables
     entities.forEach(ent => {
         sql += `CREATE TABLE ${ent.title.toUpperCase()} (\n`;
-        const pk = ent.attributes.find(a => a.isKey);
         
         ent.attributes.forEach((attr, idx) => {
             const isLast = idx === ent.attributes.length - 1;
@@ -104,6 +103,7 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
           let match;
           let tableCount = 0;
           const tableNameToId: Record<string, string> = {};
+          const pendingInlineRels: { from: string; to: string }[] = [];
 
           // Pass 1: Create Entities
           while ((match = tableRegex.exec(cleanSQL)) !== null) {
@@ -115,21 +115,38 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
               // Parse Attributes
               const attributes: Attribute[] = [];
               // Split by comma, but careful about commas in parens e.g. DECIMAL(10,2)
-              // Simple split approach for now
+              // This is a naive split; works for simple SQL
               const lines = body.split(',').map(l => l.trim()).filter(l => l.length > 0);
               
               lines.forEach((line, idx) => {
-                 // Check if it's a constraint line (PRIMARY KEY at end, FOREIGN KEY)
-                 if (line.toUpperCase().startsWith('FOREIGN KEY') || line.toUpperCase().startsWith('CONSTRAINT')) return;
-                 if (line.toUpperCase().startsWith('PRIMARY KEY') && line.includes('(')) return; // Table level PK
+                 const upperLine = line.toUpperCase();
+
+                 // Check for Inline FOREIGN KEY (e.g., FOREIGN KEY (Col) REFERENCES Table(Col))
+                 // or just REFERENCES Table(Col) if column definition
+                 if (upperLine.includes('FOREIGN KEY') && upperLine.includes('REFERENCES')) {
+                     const refMatch = line.match(/REFERENCES\s+["`]?(\w+)["`]?/i);
+                     if (refMatch) {
+                         pendingInlineRels.push({ from: tableName.toUpperCase(), to: refMatch[1].toUpperCase() });
+                     }
+                     return; 
+                 }
+
+                 // Skip other constraints
+                 if (upperLine.startsWith('CONSTRAINT') || upperLine.startsWith('INDEX') || upperLine.startsWith('UNIQUE')) return;
+                 if (upperLine.startsWith('PRIMARY KEY') && line.includes('(')) return; // Table level PK
 
                  // Naive attribute parser: Name Type ...
                  const parts = line.split(/\s+/);
                  if (parts.length < 2) return;
                  
                  const name = parts[0].replace(/["`]/g, '');
+                 
+                 // Handle cases where Name is followed by Type
+                 // Need to filter out constraints if they were not caught above
+                 if (name.toUpperCase() === 'FOREIGN' || name.toUpperCase() === 'CONSTRAINT') return;
+
                  const type = parts.slice(1).join(' ').replace(/PRIMARY KEY/i, '').trim(); // Remove PK keyword from type
-                 const isKey = line.toUpperCase().includes('PRIMARY KEY');
+                 const isKey = upperLine.includes('PRIMARY KEY');
 
                  attributes.push({
                      id: `ATTR_${Math.random().toString(36).substr(2, 6)}`,
@@ -155,16 +172,34 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
               tableCount++;
           }
 
-          // Pass 2: Extract Relationships from ALTER TABLE or Inline FKs (Simple heuristic)
-          // Look for: ALTER TABLE Table ADD CONSTRAINT ... FOREIGN KEY ... REFERENCES Target
-          const alterRegex = /ALTER\s+TABLE\s+["`]?(\w+)["`]?\s+ADD\s+CONSTRAINT.*?FOREIGN\s+KEY.*?REFERENCES\s+["`]?(\w+)["`]?/gim;
+          // Process Pending Inline Relationships
+          pendingInlineRels.forEach(rel => {
+              const idFrom = tableNameToId[rel.to];   // Referenced Table (One side)
+              const idTo = tableNameToId[rel.from];     // Table with FK (Many side)
+
+              if (idFrom && idTo) {
+                   newRelationships.push({
+                       id: `REL_${Math.random().toString(36).substr(2, 6)}`,
+                       from: idFrom,
+                       to: idTo,
+                       cardFrom: ['one'],
+                       cardTo: ['many'],
+                       label: 'REF',
+                       description: 'Importada (FK Inline)'
+                   });
+              }
+          });
+
+          // Pass 2: Extract Relationships from ALTER TABLE
+          // Regex updated to use [\s\S] to match newlines in multi-line statements
+          const alterRegex = /ALTER\s+TABLE\s+["`]?(\w+)["`]?\s+ADD\s+CONSTRAINT[\s\S]*?FOREIGN\s+KEY[\s\S]*?REFERENCES\s+["`]?(\w+)["`]?/gim;
           
           let relMatch;
           while ((relMatch = alterRegex.exec(cleanSQL)) !== null) {
-               const tableSource = relMatch[1].toUpperCase();
-               const tableTarget = relMatch[2].toUpperCase();
+               const tableSource = relMatch[1].toUpperCase(); // Table with FK
+               const tableTarget = relMatch[2].toUpperCase(); // Referenced Table
                
-               const idFrom = tableNameToId[tableTarget]; // The referenced table is the "One" side (usually)
+               const idFrom = tableNameToId[tableTarget]; // The referenced table is the "One" side
                const idTo = tableNameToId[tableSource];   // The table with FK is the "Many" side
                
                if (idFrom && idTo) {
@@ -175,7 +210,7 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
                        cardFrom: ['one'],
                        cardTo: ['many'],
                        label: 'REF',
-                       description: 'Importada do SQL'
+                       description: 'Importada (ALTER TABLE)'
                    });
                }
           }
@@ -217,7 +252,7 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
              <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                  {activeTab === 'export' 
                     ? 'Copie este código para criar seu banco de dados.' 
-                    : 'Cole comandos CREATE TABLE para gerar o diagrama.'}
+                    : 'Cole comandos CREATE TABLE ou ALTER TABLE para gerar o diagrama.'}
              </p>
              <textarea 
                 className={`w-full flex-1 p-3 font-mono text-sm border rounded resize-none focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-gray-50 border-gray-200 text-slate-800'}`}

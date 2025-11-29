@@ -330,7 +330,7 @@ const ERDiagram: React.FC<ERDiagramProps> = ({ entities, relationships, onEntity
         ];
     };
     
-    const processedConnections = relationships.map(rel => {
+    const processedConnections = relationships.map((rel): (Relationship & { start: Point, end: Point }) | null => {
         const fromEntity = entities.find(e => e.id === rel.from);
         const toEntity = entities.find(e => e.id === rel.to);
         if (!fromEntity || !toEntity) return null;

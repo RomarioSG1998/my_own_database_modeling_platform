@@ -139,7 +139,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         return point;
     };
 
-    const relNodes = relationships.map(rel => {
+    const relNodes = relationships.map((rel): (Relationship & { x: number, y: number, fromE: Entity, toE: Entity }) | null => {
         const fromE = entities.find(e => e.id === rel.from);
         const toE = entities.find(e => e.id === rel.to);
         if (!fromE || !toE) return null;
