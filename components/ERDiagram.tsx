@@ -336,7 +336,7 @@ const ERDiagram: React.FC<ERDiagramProps> = ({ entities, relationships, onEntity
         if (!fromEntity || !toEntity) return null;
         const [start, end] = findClosestAnchors(getAnchors(fromEntity), getAnchors(toEntity));
         return { ...rel, start, end };
-    }).filter((x) => x !== null) as (Relationship & { start: Point, end: Point })[];
+    }).filter((x): x is (Relationship & { start: Point, end: Point }) => x !== null);
 
     // Temp line for connection
     let connectionLine = null;

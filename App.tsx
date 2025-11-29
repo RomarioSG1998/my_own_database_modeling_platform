@@ -305,41 +305,46 @@ const App: React.FC = () => {
   useEffect(() => {
       if (!roomId) return;
 
-      const channelName = `er-diagram-room-${roomId}`;
-      const channel = new BroadcastChannel(channelName);
-      broadcastChannelRef.current = channel;
+      let channel: BroadcastChannel | null = null;
+      try {
+        const channelName = `er-diagram-room-${roomId}`;
+        channel = new BroadcastChannel(channelName);
+        broadcastChannelRef.current = channel;
 
-      channel.onmessage = (event) => {
-          const { type, payload, user } = event.data;
+        channel.onmessage = (event) => {
+            const { type, payload, user } = event.data;
 
-          if (user.id === currentUser.id) return; // Ignore own messages
+            if (user.id === currentUser.id) return; // Ignore own messages
 
-          if (type === 'DATA_UPDATE') {
-              ignoreNextBroadcast.current = true;
-              setEntities(payload.entities);
-              setRelationships(payload.relationships);
-              // Small timeout to allow state settle before enabling broadcast again
-              setTimeout(() => { ignoreNextBroadcast.current = false; }, 100);
-          } else if (type === 'CURSOR_MOVE') {
-              setRemoteUsers(prev => ({
-                  ...prev,
-                  [user.id]: { ...user, x: payload.x, y: payload.y, lastActive: Date.now() }
-              }));
-          } else if (type === 'SYNC_REQUEST') {
-              // New user wants data, send current state
-              channel.postMessage({
-                  type: 'DATA_UPDATE',
-                  payload: { entities, relationships },
-                  user: currentUser
-              });
-          }
-      };
+            if (type === 'DATA_UPDATE') {
+                ignoreNextBroadcast.current = true;
+                setEntities(payload.entities);
+                setRelationships(payload.relationships);
+                // Small timeout to allow state settle before enabling broadcast again
+                setTimeout(() => { ignoreNextBroadcast.current = false; }, 100);
+            } else if (type === 'CURSOR_MOVE') {
+                setRemoteUsers(prev => ({
+                    ...prev,
+                    [user.id]: { ...user, x: payload.x, y: payload.y, lastActive: Date.now() }
+                }));
+            } else if (type === 'SYNC_REQUEST') {
+                // New user wants data, send current state
+                channel.postMessage({
+                    type: 'DATA_UPDATE',
+                    payload: { entities, relationships },
+                    user: currentUser
+                });
+            }
+        };
 
-      // Request initial data sync when joining
-      channel.postMessage({ type: 'SYNC_REQUEST', user: currentUser });
+        // Request initial data sync when joining
+        channel.postMessage({ type: 'SYNC_REQUEST', user: currentUser });
+      } catch (e) {
+          console.error("BroadcastChannel not supported", e);
+      }
 
       return () => {
-          channel.close();
+          if (channel) channel.close();
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]); // Re-run only if room ID changes
@@ -388,18 +393,22 @@ const App: React.FC = () => {
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
     const timer = setTimeout(() => {
-        const stateToSave = {
-            isAuthenticated,
-            isChenView,
-            isEditMode,
-            showExplanations,
-            isDarkMode,
-            scale,
-            pan,
-            entities,
-            relationships
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+        try {
+            const stateToSave = {
+                isAuthenticated,
+                isChenView,
+                isEditMode,
+                showExplanations,
+                isDarkMode,
+                scale,
+                pan,
+                entities,
+                relationships
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+        } catch (e) {
+            console.error("Failed to save state", e);
+        }
     }, 500); // Debounce 500ms to avoid thrashing localStorage during drag
 
     return () => clearTimeout(timer);

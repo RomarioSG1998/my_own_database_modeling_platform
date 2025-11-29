@@ -147,7 +147,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         const x = (fromE.x + toE.x) / 2;
         const y = (fromE.y + toE.y) / 2;
         return { ...rel, x, y, fromE, toE };
-    }).filter((r) => r !== null) as (Relationship & { x: number, y: number, fromE: Entity, toE: Entity })[];
+    }).filter((r): r is (Relationship & { x: number, y: number, fromE: Entity, toE: Entity }) => r !== null);
 
     const RADIUS_X = 130;
     const RADIUS_Y = 100;
