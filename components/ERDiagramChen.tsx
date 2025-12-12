@@ -139,7 +139,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         return point;
     };
 
-    const relNodes = relationships.map((rel): (Relationship & { x: number, y: number, fromE: Entity, toE: Entity }) | null => {
+    const relNodes = relationships.map((rel) => {
         const fromE = entities.find(e => e.id === rel.from);
         const toE = entities.find(e => e.id === rel.to);
         if (!fromE || !toE) return null;
@@ -147,7 +147,7 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         const x = (fromE.x + toE.x) / 2;
         const y = (fromE.y + toE.y) / 2;
         return { ...rel, x, y, fromE, toE };
-    }).filter((r): r is (Relationship & { x: number, y: number, fromE: Entity, toE: Entity }) => r !== null);
+    }).filter((r) => r !== null) as (Relationship & { x: number, y: number, fromE: Entity, toE: Entity })[];
 
     const RADIUS_X = 130;
     const RADIUS_Y = 100;
@@ -320,8 +320,8 @@ const ERDiagramChen: React.FC<ERDiagramChenProps> = ({ entities, relationships, 
         })}
 
         {/* REMOTE CURSORS */}
-        {Object.values(remoteUsers).map(user => (
-            <RemoteCursor key={user.id} user={user} />
+        {Object.values(remoteUsers).map((user) => (
+            <RemoteCursor key={(user as RemoteUser).id} user={user as RemoteUser} />
         ))}
 
         {/* TOOLTIP */}

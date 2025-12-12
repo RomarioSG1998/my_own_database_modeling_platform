@@ -50,198 +50,218 @@ export interface RemoteUser {
 
 // --- INITIAL DATA ---
 const initialEntities: Entity[] = [
+  // LIGA & TEMPORADA (Top Center)
   { 
-    id: 'USUARIO', title: 'USUÁRIO', colorScheme: 'orange', x: 675, y: 500,
-    description: 'Esta é a peça central. Representa você ou qualquer pessoa que usa o sistema. Todas as finanças, metas e configurações estão ligadas a esta conta.',
+    id: 'TB_LIGA', title: 'TB_LIGA', colorScheme: 'orange', x: 675, y: 50,
+    description: 'Tabela LIGA (CBLOL, LCK, etc)',
     attributes: [
-      { id: 'u1', name: 'ID_Usuario', type: 'int', isKey: true },
-      { id: 'u2', name: 'Nome', type: 'varchar(100)', isKey: false },
-      { id: 'u3', name: 'Email', type: 'varchar(100)', isKey: false },
-      { id: 'u4', name: 'Senha_Hash', type: 'varchar(255)', isKey: false },
-      { id: 'u5', name: 'Tipo_Usuario', type: 'varchar(20)', isKey: false }
+      { id: 'l1', name: 'liga_id', type: 'SERIAL', isKey: true },
+      { id: 'l2', name: 'nome_liga', type: 'VARCHAR(50)', isKey: false },
+      { id: 'l3', name: 'regiao', type: 'VARCHAR(20)', isKey: false }
     ]
   },
   { 
-    id: 'META_POUPANCA', title: 'META_POUPANÇA', colorScheme: 'blue', x: 250, y: 100,
-    description: 'Aqui ficam seus sonhos financeiros, como "Comprar um Carro" ou "Viagem". O sistema acompanha quanto você já guardou versus quanto precisa.',
+    id: 'TB_TEMPORADA', title: 'TB_TEMPORADA', colorScheme: 'orange', x: 675, y: 250,
+    description: 'Tabela SEASON/SPLIT (Temporadas)',
     attributes: [
-      { id: 'm1', name: 'ID_Meta', type: 'int', isKey: true },
-      { id: 'm2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'm3', name: 'Valor_Alvo', type: 'decimal(10,2)', isKey: false },
-      { id: 'm4', name: 'Valor_Atual', type: 'decimal(10,2)', isKey: false },
-      { id: 'm5', name: 'Data_Limite', type: 'date', isKey: false }
+      { id: 't1', name: 'temporada_id', type: 'VARCHAR(20)', isKey: true },
+      { id: 't2', name: 'liga_id', type: 'INTEGER', isKey: false },
+      { id: 't3', name: 'nome_temporada', type: 'VARCHAR(50)', isKey: false },
+      { id: 't4', name: 'ano', type: 'INTEGER', isKey: false }
+    ]
+  },
+
+  // ORGANIZAÇÃO & EQUIPES (Left)
+  { 
+    id: 'TB_ORGANIZACAO', title: 'TB_ORGANIZACAO', colorScheme: 'orange', x: 250, y: 250,
+    description: 'Tabela ORGANIZAÇÃO (A Empresa/Dona da Vaga)',
+    attributes: [
+      { id: 'o1', name: 'organizacao_id', type: 'SERIAL', isKey: true },
+      { id: 'o2', name: 'nome_organizacao', type: 'VARCHAR(100)', isKey: false },
+      { id: 'o3', name: 'acronimo', type: 'VARCHAR(10)', isKey: false },
+      { id: 'o4', name: 'status_organizacao', type: 'VARCHAR(20)', isKey: false }
     ]
   },
   { 
-    id: 'INVESTIMENTO', title: 'INVESTIMENTO', colorScheme: 'blue', x: 675, y: 50,
-    description: 'Registra o dinheiro que está aplicado (Renda Fixa, Ações, etc.) para fazer seu patrimônio crescer, diferente do dinheiro parado na conta.',
+    id: 'TB_EQUIPES', title: 'TB_EQUIPES', colorScheme: 'orange', x: 250, y: 500,
+    description: 'Tabela EQUIPES (O time naquela temporada específica)',
     attributes: [
-      { id: 'i1', name: 'ID_Invest', type: 'int', isKey: true },
-      { id: 'i2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'i3', name: 'Tipo_Ativo', type: 'varchar(50)', isKey: false },
-      { id: 'i4', name: 'Valor_Aplicado', type: 'decimal(10,2)', isKey: false },
-      { id: 'i5', name: 'ROI_Atual', type: 'decimal(5,2)', isKey: false }
+      { id: 'e1', name: 'equipe_id', type: 'SERIAL', isKey: true },
+      { id: 'e2', name: 'organizacao_id', type: 'INTEGER', isKey: false },
+      { id: 'e3', name: 'temporada_id', type: 'VARCHAR(20)', isKey: false }
+    ]
+  },
+
+  // JOGADORES & ROSTER (Right)
+  { 
+    id: 'TB_JOGADORES', title: 'TB_JOGADORES', colorScheme: 'green', x: 1100, y: 50,
+    description: 'Tabela JOGADORES (Cadastro Pessoal)',
+    attributes: [
+      { id: 'j1', name: 'player_id', type: 'SERIAL', isKey: true },
+      { id: 'j2', name: 'nome', type: 'VARCHAR(50)', isKey: false },
+      { id: 'j3', name: 'sobrenome', type: 'VARCHAR(50)', isKey: false },
+      { id: 'j4', name: 'nickname', type: 'VARCHAR(50)', isKey: false },
+      { id: 'j5', name: 'nacionalidade', type: 'VARCHAR(30)', isKey: false },
+      { id: 'j6', name: 'data_nascimento', type: 'DATE', isKey: false }
     ]
   },
   { 
-    id: 'LOG_AUDITORIA', title: 'LOG_AUDITORIA', colorScheme: 'pink', x: 1100, y: 100,
-    description: 'Uma "caixa preta" de segurança. Grava ações importantes (como mudar senha ou apagar dados) para que administradores saibam o que aconteceu no sistema.',
+    id: 'TB_ROSTER', title: 'TB_ROSTER', colorScheme: 'green', x: 1100, y: 350,
+    description: 'Tabela CONTRATO/ROSTER (Quem jogou onde e quando)',
     attributes: [
-      { id: 'l1', name: 'ID_Log', type: 'int', isKey: true },
-      { id: 'l2', name: 'ID_Admin', type: 'int', isKey: false },
-      { id: 'l3', name: 'Acao', type: 'varchar(255)', isKey: false },
-      { id: 'l4', name: 'Data_Hora', type: 'datetime', isKey: false }
+      { id: 'r1', name: 'contrato_id', type: 'SERIAL', isKey: true },
+      { id: 'r2', name: 'player_id', type: 'INTEGER', isKey: false },
+      { id: 'r3', name: 'equipe_id', type: 'INTEGER', isKey: false },
+      { id: 'r4', name: 'funcao_id', type: 'INTEGER', isKey: false },
+      { id: 'r5', name: 'temporada_id', type: 'VARCHAR(20)', isKey: false }
+    ]
+  },
+
+  // REFERÊNCIAS: CLASSES, CAMPEÕES, FUNÇÕES (Far Right)
+  { 
+    id: 'TB_FUNCOES', title: 'TB_FUNCOES', colorScheme: 'blue', x: 1450, y: 350,
+    description: 'Tabela ROLE/FUNÇÃO (Top, Jungle...)',
+    attributes: [
+      { id: 'f1', name: 'funcao_id', type: 'SERIAL', isKey: true },
+      { id: 'f2', name: 'nome_funcao', type: 'VARCHAR(20)', isKey: false }
     ]
   },
   { 
-    id: 'CONTA', title: 'CONTA', colorScheme: 'green', x: 1250, y: 350,
-    description: 'Representa suas contas bancárias reais (Nubank, Itaú, Carteira física). É de onde sai ou para onde vai o dinheiro das transações.',
+    id: 'TB_CLASSES', title: 'TB_CLASSES', colorScheme: 'blue', x: 1450, y: 600,
+    description: 'Tabela CLASSES CAMPEÕES (Mago, Lutador...)',
     attributes: [
-      { id: 'c1', name: 'ID_Conta', type: 'int', isKey: true },
-      { id: 'c2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'c3', name: 'Saldo', type: 'decimal(10,2)', isKey: false },
-      { id: 'c4', name: 'Instituicao', type: 'varchar(100)', isKey: false }
+      { id: 'c1', name: 'classe_id', type: 'SERIAL', isKey: true },
+      { id: 'c2', name: 'nome_classe', type: 'VARCHAR(30)', isKey: false }
     ]
   },
   { 
-    id: 'CARTAO_CREDITO', title: 'CARTAO_CREDITO', colorScheme: 'green', x: 1250, y: 600,
-    description: 'Seus cartões de crédito. Diferente da conta, aqui você gasta com um limite e paga no vencimento.',
+    id: 'TB_CAMPEOES', title: 'TB_CAMPEOES', colorScheme: 'blue', x: 1450, y: 800,
+    description: 'Tabela PERSONAGENS/CAMPEÕES',
     attributes: [
-      { id: 'cc1', name: 'ID_Cartao', type: 'int', isKey: true },
-      { id: 'cc2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'cc3', name: 'Limite', type: 'decimal(10,2)', isKey: false },
-      { id: 'cc4', name: 'Dia_Vencimento', type: 'int', isKey: false }
+      { id: 'cp1', name: 'campeao_id', type: 'SERIAL', isKey: true },
+      { id: 'cp2', name: 'nome_campeao', type: 'VARCHAR(50)', isKey: false },
+      { id: 'cp3', name: 'data_lancamento', type: 'DATE', isKey: false },
+      { id: 'cp4', name: 'funcao_primaria_id', type: 'INTEGER', isKey: false }
+    ]
+  },
+
+  // PARTIDAS & JOGOS (Center/Bottom)
+  { 
+    id: 'TB_PARTIDAS', title: 'TB_PARTIDAS', colorScheme: 'pink', x: 675, y: 500,
+    description: 'Tabela PARTIDAS (A Série/Confronto MD1, MD3, MD5)',
+    attributes: [
+      { id: 'p1', name: 'partida_id', type: 'SERIAL', isKey: true },
+      { id: 'p2', name: 'temporada_id', type: 'VARCHAR(20)', isKey: false },
+      { id: 'p3', name: 'data_match', type: 'DATE', isKey: false },
+      { id: 'p4', name: 'fase', type: 'VARCHAR(30)', isKey: false },
+      { id: 'p5', name: 'equipe1_id', type: 'INTEGER', isKey: false },
+      { id: 'p6', name: 'equipe2_id', type: 'INTEGER', isKey: false },
+      { id: 'p7', name: 'placar_match', type: 'VARCHAR(10)', isKey: false },
+      { id: 'p8', name: 'equipe_win_id', type: 'INTEGER', isKey: false }
     ]
   },
   { 
-    id: 'TRANSACAO', title: 'TRANSAÇÃO', colorScheme: 'green', x: 1250, y: 900,
-    description: 'O coração do controle financeiro. Cada café comprado, salário recebido ou conta paga é registrado aqui.',
+    id: 'TB_JOGOS', title: 'TB_JOGOS', colorScheme: 'pink', x: 675, y: 800,
+    description: 'Tabela JOGO (O Mapa Individual dentro da série)',
     attributes: [
-      { id: 't1', name: 'ID_Trans', type: 'int', isKey: true },
-      { id: 't2', name: 'ID_Origem', type: 'int', isKey: false },
-      { id: 't3', name: 'Valor', type: 'decimal(10,2)', isKey: false },
-      { id: 't4', name: 'Data', type: 'date', isKey: false },
-      { id: 't5', name: 'Comprovante_URL', type: 'varchar(255)', isKey: false },
-      { id: 't6', name: 'ID_Categoria', type: 'int', isKey: false }
+      { id: 'jg1', name: 'jogo_id', type: 'SERIAL', isKey: true },
+      { id: 'jg2', name: 'partida_id', type: 'INTEGER', isKey: false },
+      { id: 'jg3', name: 'numero_jogo_serie', type: 'INTEGER', isKey: false },
+      { id: 'jg4', name: 'duracao_segundos', type: 'INTEGER', isKey: false },
+      { id: 'jg5', name: 'win_side', type: 'VARCHAR(10)', isKey: false }
+    ]
+  },
+
+  // STATS (Deep Bottom)
+  { 
+    id: 'TB_STATS_TIME_JOGO', title: 'TB_STATS_TIME_JOGO', colorScheme: 'pink', x: 250, y: 1100,
+    description: 'Tabela STATS TIME POR JOGO (Objetivos)',
+    attributes: [
+      { id: 'st1', name: 'estatistica_time_id', type: 'SERIAL', isKey: true },
+      { id: 'st2', name: 'jogo_id', type: 'INTEGER', isKey: false },
+      { id: 'st3', name: 'equipe_id', type: 'INTEGER', isKey: false },
+      { id: 'st4', name: 'side', type: 'VARCHAR(10)', isKey: false },
+      { id: 'st5', name: 'total_gold', type: 'INTEGER', isKey: false },
+      { id: 'st6', name: 'total_kills', type: 'INTEGER', isKey: false },
+      { id: 'st7', name: 'total_towers', type: 'INTEGER', isKey: false }
     ]
   },
   { 
-    id: 'CATEGORIA', title: 'CATEGORIA', colorScheme: 'blue', x: 950, y: 950,
-    description: 'Etiquetas para organizar seu dinheiro, como "Alimentação", "Transporte" ou "Lazer". Ajuda a saber para onde o dinheiro está indo.',
+    id: 'TB_BANS_JOGO', title: 'TB_BANS_JOGO', colorScheme: 'pink', x: 675, y: 1100,
+    description: 'Tabela BANS POR JOGO (Draft)',
     attributes: [
-      { id: 'cat1', name: 'ID_Categoria', type: 'int', isKey: true },
-      { id: 'cat2', name: 'Nome', type: 'varchar(50)', isKey: false },
-      { id: 'cat3', name: 'Tipo', type: 'varchar(20)', isKey: false },
-      { id: 'cat4', name: 'Icone', type: 'varchar(50)', isKey: false }
+      { id: 'b1', name: 'jogo_id', type: 'INTEGER', isKey: true },
+      { id: 'b2', name: 'equipe_id', type: 'INTEGER', isKey: true },
+      { id: 'b3', name: 'ban1_id', type: 'INTEGER', isKey: false },
+      { id: 'b4', name: 'ban2_id', type: 'INTEGER', isKey: false },
+      { id: 'b5', name: 'ban3_id', type: 'INTEGER', isKey: false },
+      { id: 'b6', name: 'ban4_id', type: 'INTEGER', isKey: false },
+      { id: 'b7', name: 'ban5_id', type: 'INTEGER', isKey: false }
     ]
   },
   { 
-    id: 'ORCAMENTO', title: 'ORÇAMENTO', colorScheme: 'blue', x: 600, y: 950,
-    description: 'Seu planejamento mensal. Aqui você define limites, por exemplo: "Quero gastar no máximo R$ 500,00 com Alimentação este mês".',
+    id: 'TB_STATS_PLAYER_JOGO', title: 'TB_STATS_PLAYER_JOGO', colorScheme: 'pink', x: 1100, y: 1100,
+    description: 'Tabela PLAYER GAME STATS (Performance Individual)',
     attributes: [
-      { id: 'o1', name: 'ID_Orc', type: 'int', isKey: true },
-      { id: 'o2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'o3', name: 'ID_Categoria', type: 'int', isKey: false },
-      { id: 'o4', name: 'Valor_Limite', type: 'decimal(10,2)', isKey: false },
-      { id: 'o5', name: 'Mes_Ano', type: 'varchar(7)', isKey: false }
-    ]
-  },
-  { 
-    id: 'BOLETO_DDA', title: 'BOLETO_DDA', colorScheme: 'blue', x: 200, y: 900,
-    description: 'Contas que chegam automaticamente no seu nome (Busca DDA), como luz ou internet, aguardando pagamento ou agendamento.',
-    attributes: [
-      { id: 'b1', name: 'ID_Boleto', type: 'int', isKey: true },
-      { id: 'b2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'b3', name: 'Cod_Barras', type: 'varchar(255)', isKey: false },
-      { id: 'b4', name: 'Vencimento', type: 'date', isKey: false },
-      { id: 'b5', name: 'Status', type: 'varchar(20)', isKey: false }
-    ]
-  },
-  { 
-    id: 'ASSINATURA', title: 'ASSINATURA', colorScheme: 'blue', x: 100, y: 600,
-    description: 'Controla se você paga pelo sistema Premium. Define quais recursos extras do sistema você pode acessar.',
-    attributes: [
-      { id: 'a1', name: 'ID_Assin', type: 'int', isKey: true },
-      { id: 'a2', name: 'ID_Usuario', type: 'int', isKey: false },
-      { id: 'a3', name: 'ID_Plano', type: 'int', isKey: false },
-      { id: 'a4', name: 'Status', type: 'varchar(20)', isKey: false },
-      { id: 'a5', name: 'Data_Fim', type: 'date', isKey: false }
-    ]
-  },
-  { 
-    id: 'PLANO', title: 'PLANO', colorScheme: 'blue', x: 100, y: 300,
-    description: 'Os pacotes disponíveis (Ex: Gratuito, Gold, Platinum) e o que cada um oferece.',
-    attributes: [
-      { id: 'p1', name: 'ID_Plano', type: 'int', isKey: true },
-      { id: 'p2', name: 'Nome', type: 'varchar(50)', isKey: false },
-      { id: 'p3', name: 'Preco', type: 'decimal(10,2)', isKey: false },
-      { id: 'p4', name: 'Recursos', type: 'text', isKey: false }
+      { id: 'sp1', name: 'estatistica_player_id', type: 'SERIAL', isKey: true },
+      { id: 'sp2', name: 'jogo_id', type: 'INTEGER', isKey: false },
+      { id: 'sp3', name: 'jogador_id', type: 'INTEGER', isKey: false },
+      { id: 'sp4', name: 'campeao_id', type: 'INTEGER', isKey: false },
+      { id: 'sp5', name: 'funcao_id', type: 'INTEGER', isKey: false },
+      { id: 'sp6', name: 'kills', type: 'INTEGER', isKey: false },
+      { id: 'sp7', name: 'deaths', type: 'INTEGER', isKey: false },
+      { id: 'sp8', name: 'assists', type: 'INTEGER', isKey: false }
     ]
   },
 ];
 
 const initialRelationships: Relationship[] = [
-  { 
-    id: 'r1', from: 'USUARIO', to: 'META_POUPANCA', cardFrom: ['one'], cardTo: ['many'], label: 'TEM',
-    description: 'Um único Usuário pode criar várias Metas de Poupança diferentes ao mesmo tempo.'
-  },
-  { 
-    id: 'r2', from: 'USUARIO', to: 'INVESTIMENTO', cardFrom: ['one'], cardTo: ['many'], label: 'POSSUI',
-    description: 'O Usuário pode ter múltiplos Investimentos registrados na sua carteira.'
-  },
-  { 
-    id: 'r3', from: 'USUARIO', to: 'LOG_AUDITORIA', cardFrom: ['one'], cardTo: ['many'], label: 'GERA',
-    description: 'As ações de um Usuário geram vários registros de segurança (Logs) para controle.'
-  },
-  { 
-    id: 'r4', from: 'USUARIO', to: 'CONTA', cardFrom: ['one'], cardTo: ['many'], label: 'MANTÉM',
-    description: 'Um Usuário pode gerenciar várias Contas bancárias (Ex: uma no Banco A, outra no Banco B).'
-  },
-  { 
-    id: 'r5', from: 'USUARIO', to: 'CARTAO_CREDITO', cardFrom: ['one'], cardTo: ['many'], label: 'POSSUI',
-    description: 'Da mesma forma que as contas, um Usuário pode cadastrar vários Cartões de Crédito.'
-  },
-  { 
-    id: 'r6', from: 'USUARIO', to: 'BOLETO_DDA', cardFrom: ['one'], cardTo: ['many'], label: 'PAGA',
-    description: 'Boletos são emitidos no nome do Usuário; ele pode ter vários boletos pendentes.'
-  },
-  { 
-    id: 'r7', from: 'USUARIO', to: 'ORCAMENTO', cardFrom: ['one'], cardTo: ['many'], label: 'DEFINE',
-    description: 'O Usuário define Orçamentos para controlar seus gastos em diferentes áreas.'
-  },
-  { 
-    id: 'r8', from: 'USUARIO', to: 'ASSINATURA', cardFrom: ['one'], cardTo: ['many'], label: 'ASSINA',
-    description: 'O Usuário contrata Assinaturas para liberar recursos no sistema.'
-  },
-  { 
-    id: 'r9', from: 'PLANO', to: 'ASSINATURA', cardFrom: ['one'], cardTo: ['many'], label: 'CONTÉM',
-    description: 'Um Plano (ex: Gold) serve de base para várias Assinaturas de usuários diferentes.'
-  },
-  { 
-    id: 'r10', from: 'CATEGORIA', to: 'ORCAMENTO', cardFrom: ['one'], cardTo: ['many'], label: 'CLASSIFICA',
-    description: 'Uma Categoria (ex: Alimentação) é usada para criar um Orçamento específico para ela.'
-  },
-  { 
-    id: 'r11', from: 'CATEGORIA', to: 'TRANSACAO', cardFrom: ['one'], cardTo: ['many'], label: 'CLASSIFICA',
-    description: 'Muitas Transações podem pertencer à mesma Categoria (ex: vários gastos com "Uber" na categoria "Transporte").'
-  },
-  { 
-    id: 'r12', from: 'CARTAO_CREDITO', to: 'TRANSACAO', cardFrom: ['one'], cardTo: ['many'], label: 'REALIZA',
-    description: 'Um Cartão de Crédito contém o histórico de várias Transações realizadas com ele.'
-  },
-  { 
-    id: 'r13', from: 'CONTA', to: 'TRANSACAO', cardFrom: ['one'], cardTo: ['many'], label: 'REALIZA',
-    description: 'Uma Conta Bancária reflete o extrato de várias Transações (saídas e entradas) feitas nela.'
-  },
+  // LIGA & TEMPORADA
+  { id: 'r1', from: 'TB_LIGA', to: 'TB_TEMPORADA', cardFrom: ['one'], cardTo: ['many'], label: 'ORGANIZA' },
+  
+  // ORGANIZAÇÃO -> EQUIPES
+  { id: 'r2', from: 'TB_ORGANIZACAO', to: 'TB_EQUIPES', cardFrom: ['one'], cardTo: ['many'], label: 'POSSUI' },
+  { id: 'r3', from: 'TB_TEMPORADA', to: 'TB_EQUIPES', cardFrom: ['one'], cardTo: ['many'], label: 'REGISTRA' },
+
+  // CAMPEOES & CLASSES
+  { id: 'r4', from: 'TB_CLASSES', to: 'TB_CAMPEOES', cardFrom: ['one'], cardTo: ['many'], label: 'CLASSIFICA' },
+
+  // ROSTER
+  { id: 'r5', from: 'TB_JOGADORES', to: 'TB_ROSTER', cardFrom: ['one'], cardTo: ['many'], label: 'ASSINA' },
+  { id: 'r6', from: 'TB_EQUIPES', to: 'TB_ROSTER', cardFrom: ['one'], cardTo: ['many'], label: 'CONTRATA' },
+  { id: 'r7', from: 'TB_FUNCOES', to: 'TB_ROSTER', cardFrom: ['one'], cardTo: ['many'], label: 'JOGA COMO' },
+  { id: 'r8', from: 'TB_TEMPORADA', to: 'TB_ROSTER', cardFrom: ['one'], cardTo: ['many'], label: 'VIGENTE EM' },
+
+  // PARTIDAS
+  { id: 'r9', from: 'TB_TEMPORADA', to: 'TB_PARTIDAS', cardFrom: ['one'], cardTo: ['many'], label: 'CONTÉM' },
+  { id: 'r10', from: 'TB_EQUIPES', to: 'TB_PARTIDAS', cardFrom: ['one'], cardTo: ['many'], label: 'DISPUTA' },
+  
+  // JOGOS
+  { id: 'r11', from: 'TB_PARTIDAS', to: 'TB_JOGOS', cardFrom: ['one'], cardTo: ['many'], label: 'COMPOSTA DE' },
+
+  // STATS TIME
+  { id: 'r12', from: 'TB_JOGOS', to: 'TB_STATS_TIME_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'GERA' },
+  { id: 'r13', from: 'TB_EQUIPES', to: 'TB_STATS_TIME_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'PERFORMA' },
+
+  // BANS
+  { id: 'r14', from: 'TB_JOGOS', to: 'TB_BANS_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'TEM' },
+  { id: 'r15', from: 'TB_EQUIPES', to: 'TB_BANS_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'DECIDE' },
+  { id: 'r16', from: 'TB_CAMPEOES', to: 'TB_BANS_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'BANIDO' },
+
+  // STATS PLAYER
+  { id: 'r17', from: 'TB_JOGOS', to: 'TB_STATS_PLAYER_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'DETALHA' },
+  { id: 'r18', from: 'TB_JOGADORES', to: 'TB_STATS_PLAYER_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'JOGA' },
+  { id: 'r19', from: 'TB_CAMPEOES', to: 'TB_STATS_PLAYER_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'USADO' },
+  { id: 'r20', from: 'TB_FUNCOES', to: 'TB_STATS_PLAYER_JOGO', cardFrom: ['one'], cardTo: ['many'], label: 'POSIÇÃO' }
 ];
 
 const commonDataTypes = [
     'INT', 'VARCHAR(255)', 'TEXT', 'DECIMAL(10,2)', 
     'DATE', 'DATETIME', 'BOOLEAN', 'CHAR(1)', 
-    'FLOAT', 'DOUBLE', 'BIGINT'
+    'FLOAT', 'DOUBLE', 'BIGINT', 'SERIAL'
 ];
 
-const STORAGE_KEY = 'my_own_model_v1';
+const STORAGE_KEY = 'my_own_model_v2'; // Bumped version to reset storage
 const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
 
 const App: React.FC = () => {

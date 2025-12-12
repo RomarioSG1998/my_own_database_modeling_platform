@@ -330,13 +330,13 @@ const ERDiagram: React.FC<ERDiagramProps> = ({ entities, relationships, onEntity
         ];
     };
     
-    const processedConnections = relationships.map((rel): (Relationship & { start: Point, end: Point }) | null => {
+    const processedConnections = relationships.map((rel) => {
         const fromEntity = entities.find(e => e.id === rel.from);
         const toEntity = entities.find(e => e.id === rel.to);
         if (!fromEntity || !toEntity) return null;
         const [start, end] = findClosestAnchors(getAnchors(fromEntity), getAnchors(toEntity));
         return { ...rel, start, end };
-    }).filter((x): x is (Relationship & { start: Point, end: Point }) => x !== null);
+    }).filter((x) => x !== null) as (Relationship & { start: Point, end: Point })[];
 
     // Temp line for connection
     let connectionLine = null;
@@ -423,8 +423,8 @@ const ERDiagram: React.FC<ERDiagramProps> = ({ entities, relationships, onEntity
           ))}
           
           {/* REMOTE CURSORS */}
-          {Object.values(remoteUsers).map(user => (
-              <RemoteCursor key={user.id} user={user} />
+          {Object.values(remoteUsers).map((user) => (
+              <RemoteCursor key={(user as RemoteUser).id} user={user as RemoteUser} />
           ))}
 
           {/* TOOLTIP LAYER */}

@@ -97,13 +97,34 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
             .trim();
 
           // Regex to find CREATE TABLE blocks
-          // Matches: CREATE TABLE Name ( content );
-          const tableRegex = /CREATE\s+TABLE\s+["`]?(\w+)["`]?\s*\(([\s\S]*?)\);/gim;
+          // Matches: CREATE TABLE [IF NOT EXISTS] Name ( content );
+          const tableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?(\w+)["`]?\s*\(([\s\S]*?)\);/gim;
           
           let match;
           let tableCount = 0;
           const tableNameToId: Record<string, string> = {};
           const pendingInlineRels: { from: string; to: string }[] = [];
+
+          // Helper for splitting by comma but ignoring parens (for DECIMAL(10,2))
+          const smartSplit = (str: string, delimiter: string) => {
+                const result = [];
+                let current = '';
+                let depth = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str[i];
+                    if (char === '(') depth++;
+                    if (char === ')') depth--;
+                    
+                    if (char === delimiter && depth === 0) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                if (current) result.push(current.trim());
+                return result;
+          };
 
           // Pass 1: Create Entities
           while ((match = tableRegex.exec(cleanSQL)) !== null) {
@@ -112,46 +133,54 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
               const id = `ENT_${Math.random().toString(36).substr(2, 6)}`;
               tableNameToId[tableName.toUpperCase()] = id;
 
-              // Parse Attributes
+              // Parse Attributes using smart split
+              const lines = smartSplit(body, ',').filter(l => l.length > 0);
               const attributes: Attribute[] = [];
-              // Split by comma, but careful about commas in parens e.g. DECIMAL(10,2)
-              // This is a naive split; works for simple SQL
-              const lines = body.split(',').map(l => l.trim()).filter(l => l.length > 0);
               
-              lines.forEach((line, idx) => {
+              lines.forEach((line) => {
                  const upperLine = line.toUpperCase();
-
-                 // Check for Inline FOREIGN KEY (e.g., FOREIGN KEY (Col) REFERENCES Table(Col))
-                 // or just REFERENCES Table(Col) if column definition
-                 if (upperLine.includes('FOREIGN KEY') && upperLine.includes('REFERENCES')) {
+                 
+                 // 1. Check for Table-Level CONSTRAINT with FOREIGN KEY
+                 if (upperLine.startsWith('CONSTRAINT') || (upperLine.includes('FOREIGN KEY') && upperLine.includes('REFERENCES'))) {
                      const refMatch = line.match(/REFERENCES\s+["`]?(\w+)["`]?/i);
                      if (refMatch) {
                          pendingInlineRels.push({ from: tableName.toUpperCase(), to: refMatch[1].toUpperCase() });
                      }
                      return; 
                  }
+                 
+                 // 2. Check for Other Constraints to skip
+                 if (upperLine.startsWith('INDEX') || upperLine.startsWith('UNIQUE') || (upperLine.startsWith('PRIMARY KEY') && line.includes('('))) return;
 
-                 // Skip other constraints
-                 if (upperLine.startsWith('CONSTRAINT') || upperLine.startsWith('INDEX') || upperLine.startsWith('UNIQUE')) return;
-                 if (upperLine.startsWith('PRIMARY KEY') && line.includes('(')) return; // Table level PK
-
-                 // Naive attribute parser: Name Type ...
+                 // 3. Attribute Parsing
                  const parts = line.split(/\s+/);
                  if (parts.length < 2) return;
                  
                  const name = parts[0].replace(/["`]/g, '');
                  
-                 // Handle cases where Name is followed by Type
-                 // Need to filter out constraints if they were not caught above
-                 if (name.toUpperCase() === 'FOREIGN' || name.toUpperCase() === 'CONSTRAINT') return;
+                 // 4. Check for Inline Column FOREIGN KEY (col type REFERENCES table(col))
+                 // This catches: "liga_id INTEGER REFERENCES tb_liga(liga_id)"
+                 const refMatch = line.match(/REFERENCES\s+["`]?(\w+)["`]?/i);
+                 if (refMatch) {
+                      pendingInlineRels.push({ from: tableName.toUpperCase(), to: refMatch[1].toUpperCase() });
+                 }
 
-                 const type = parts.slice(1).join(' ').replace(/PRIMARY KEY/i, '').trim(); // Remove PK keyword from type
+                 // Clean up type
+                 // Remove PRIMARY KEY, REFERENCES..., NOT NULL, etc
+                 let type = parts.slice(1).join(' ');
+                 type = type.replace(/PRIMARY\s+KEY/i, '')
+                            .replace(/REFERENCES\s+["`]?\w+["`]?(\(.*\))?/i, '')
+                            .replace(/NOT\s+NULL/i, '')
+                            .replace(/NULL/i, '')
+                            .replace(/DEFAULT\s+.*$/i, '')
+                            .trim();
+
                  const isKey = upperLine.includes('PRIMARY KEY');
 
                  attributes.push({
                      id: `ATTR_${Math.random().toString(36).substr(2, 6)}`,
                      name,
-                     type: type.split(' ')[0], // Just grab first word of type for cleanliness
+                     type: type.split(' ')[0], // Keep it simple (e.g., VARCHAR)
                      isKey
                  });
               });
@@ -172,20 +201,22 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
               tableCount++;
           }
 
-          // Process Pending Inline Relationships
+          // Process Pending Inline Relationships (Caught inside CREATE TABLE)
           pendingInlineRels.forEach(rel => {
-              const idFrom = tableNameToId[rel.to];   // Referenced Table (One side)
-              const idTo = tableNameToId[rel.from];     // Table with FK (Many side)
+              // 'from' is the table containing the FK (Child/Many side)
+              // 'to' is the referenced table (Parent/One side)
+              const idChild = tableNameToId[rel.from]; 
+              const idParent = tableNameToId[rel.to]; 
 
-              if (idFrom && idTo) {
+              if (idChild && idParent) {
                    newRelationships.push({
                        id: `REL_${Math.random().toString(36).substr(2, 6)}`,
-                       from: idFrom,
-                       to: idTo,
+                       from: idParent,
+                       to: idChild,
                        cardFrom: ['one'],
                        cardTo: ['many'],
                        label: 'REF',
-                       description: 'Importada (FK Inline)'
+                       description: 'Importada (FK)'
                    });
               }
           });
@@ -196,17 +227,17 @@ const SQLModal: React.FC<SQLModalProps> = ({ isOpen, onClose, entities, relation
           
           let relMatch;
           while ((relMatch = alterRegex.exec(cleanSQL)) !== null) {
-               const tableSource = relMatch[1].toUpperCase(); // Table with FK
-               const tableTarget = relMatch[2].toUpperCase(); // Referenced Table
+               const tableChild = relMatch[1].toUpperCase(); // Table with FK
+               const tableParent = relMatch[2].toUpperCase(); // Referenced Table
                
-               const idFrom = tableNameToId[tableTarget]; // The referenced table is the "One" side
-               const idTo = tableNameToId[tableSource];   // The table with FK is the "Many" side
+               const idParent = tableNameToId[tableParent];
+               const idChild = tableNameToId[tableChild];
                
-               if (idFrom && idTo) {
+               if (idParent && idChild) {
                    newRelationships.push({
                        id: `REL_${Math.random().toString(36).substr(2, 6)}`,
-                       from: idFrom,
-                       to: idTo,
+                       from: idParent,
+                       to: idChild,
                        cardFrom: ['one'],
                        cardTo: ['many'],
                        label: 'REF',
